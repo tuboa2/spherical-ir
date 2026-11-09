@@ -10,6 +10,7 @@ from .engine import (
     safe_l2_normalize,
     verify_euclidean_isomorphism,
 )
+from .vectorizer import SublinearTfidfVectorizer
 
 __all__ = [
     "DenseCosineIndex",
@@ -18,4 +19,5 @@ __all__ = [
     "compute_cosine_similarity",
     "safe_l2_normalize",
     "verify_euclidean_isomorphism",
+    "SublinearTfidfVectorizer",
 ]

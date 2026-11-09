@@ -14,7 +14,7 @@ import math
 import unittest
 
 import numpy as np
-from spherical_ir.engine import (
+from src.engine import (
     DenseCosineIndex,
     compute_angular_distance,
     compute_cosine_similarity,
