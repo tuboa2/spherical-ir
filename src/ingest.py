@@ -12,7 +12,6 @@ import glob
 import gzip
 import os
 import re
-from typing import List, Optional, Tuple
 
 
 def clean_roff_text(raw_roff: str) -> str:
@@ -59,7 +58,7 @@ class LocalDocumentationIngester:
         max_docs: int = 1000,
         man_dir: str = "/usr/share/man/man1",
         min_words: int = 20,
-    ) -> List[Tuple[str, str]]:
+    ) -> list[tuple[str, str]]:
         """
         Ingests native Linux manual pages from a local man directory.
 
@@ -77,7 +76,7 @@ class LocalDocumentationIngester:
         pattern = os.path.join(man_dir, "*.1.gz")
         all_paths = sorted(glob.glob(pattern))
 
-        documents: List[Tuple[str, str]] = []
+        documents: list[tuple[str, str]] = []
         for path in all_paths:
             if len(documents) >= max_docs:
                 break
@@ -99,10 +98,10 @@ class LocalDocumentationIngester:
     @staticmethod
     def load_text_directory(
         directory: str,
-        extensions: Tuple[str, ...] = (".md", ".txt"),
+        extensions: tuple[str, ...] = (".md", ".txt"),
         max_docs: int = 1000,
         min_words: int = 10,
-    ) -> List[Tuple[str, str]]:
+    ) -> list[tuple[str, str]]:
         """
         Ingests local markdown or plain text files from a directory.
 
@@ -118,7 +117,7 @@ class LocalDocumentationIngester:
         if not os.path.exists(directory):
             raise FileNotFoundError(f"Directory not found: {directory}")
 
-        documents: List[Tuple[str, str]] = []
+        documents: list[tuple[str, str]] = []
         for root, _, files in os.walk(directory):
             for file in sorted(files):
                 if len(documents) >= max_docs:
@@ -128,7 +127,9 @@ class LocalDocumentationIngester:
                     full_path = os.path.join(root, file)
                     rel_id = os.path.relpath(full_path, directory)
                     try:
-                        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                        with open(
+                            full_path, "r", encoding="utf-8", errors="ignore"
+                        ) as f:
                             content = f.read()
                     except Exception:
                         continue

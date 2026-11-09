@@ -280,6 +280,148 @@ def cmd_explain(args: argparse.Namespace) -> None:
     print("=" * 65)
 
 
+def cmd_audit_duplicates(args: argparse.Namespace) -> None:
+    """Scans entire corpus pairwise to discover and export all near-duplicate clusters."""
+    index_dir = args.index_dir or INDEX_DIR
+    try:
+        index, vectorizer, snippets = load_artifacts(index_dir)
+    except FileNotFoundError as err:
+        print(f"[!] {err}")
+        sys.exit(1)
+
+    t0 = time.time()
+    n_docs = index.num_docs
+    assert index._doc_matrix is not None
+    doc_matrix = index._doc_matrix  # Shape: (N, D)
+
+    # 1. Pairwise BLAS GEMM: S = D_hat @ D_hat^T
+    print("=" * 65)
+    print("Spherical-IR: Corpus-Wide Duplicate Audit")
+    print(f"[*] Scanning {n_docs} documents across {index.dim} dimensions...")
+    print(
+        f"[*] Duplicate threshold: theta <= {args.duplicate_deg:.1f} deg "
+        f"(cos_sim >= {math.cos(math.radians(args.duplicate_deg)):.4f})"
+    )
+    print("=" * 65)
+
+    sim_matrix = np.dot(doc_matrix, doc_matrix.T)
+    sim_matrix = np.clip(sim_matrix, -1.0, 1.0)
+    thetas = np.arccos(sim_matrix)
+
+    threshold_rad = math.radians(args.duplicate_deg)
+
+    # 2. Disjoint-Set (Union-Find) clustering
+    parent = list(range(n_docs))
+
+    def find(i: int) -> int:
+        path = []
+        while parent[i] != i:
+            path.append(i)
+            i = parent[i]
+        for node in path:
+            parent[node] = i
+        return i
+
+    def union(i: int, j: int) -> None:
+        root_i = find(i)
+        root_j = find(j)
+        if root_i != root_j:
+            parent[root_i] = root_j
+
+    # Find duplicate pairs
+    pair_count = 0
+    for i in range(n_docs):
+        for j in range(i + 1, n_docs):
+            if thetas[i, j] <= threshold_rad:
+                union(i, j)
+                pair_count += 1
+
+    # Group into clusters
+    clusters: dict[int, list[int]] = {}
+    for i in range(n_docs):
+        root = find(i)
+        clusters.setdefault(root, []).append(i)
+
+    dup_clusters = [members for members in clusters.values() if len(members) > 1]
+    dup_clusters.sort(key=len, reverse=True)
+
+    elapsed = time.time() - t0
+    total_redundant_docs = sum(len(c) - 1 for c in dup_clusters)
+    redundancy_ratio = (
+        (total_redundant_docs / n_docs * 100.0) if n_docs > 0 else 0.0
+    )
+
+    print(f"[+] Pairwise sweep completed in {elapsed:.3f}s")
+    print(f"[+] Duplicate clusters found: {len(dup_clusters)}")
+    print(
+        f"[+] Redundant duplicate documents: {total_redundant_docs} / {n_docs} "
+        f"({redundancy_ratio:.1f}%)"
+    )
+    print("-" * 65)
+
+    cluster_records = []
+    for c_idx, members in enumerate(dup_clusters[: args.max_display], start=1):
+        canonical_idx = members[0]
+        canonical_id = index._doc_ids[canonical_idx]
+        duplicates_info = []
+
+        print(
+            f"\n[Cluster {c_idx}] CANONICAL: {canonical_id}  ({len(members)} documents in cluster)"
+        )
+        for m_idx in members[1:]:
+            dup_id = index._doc_ids[m_idx]
+            sim = float(sim_matrix[canonical_idx, m_idx])
+            deg = float(math.degrees(thetas[canonical_idx, m_idx]))
+            contribs = vectorizer.explain_similarity(
+                doc_matrix[canonical_idx], doc_matrix[m_idx], top_n=3
+            )
+            terms_str = ", ".join(
+                f"{t}: {pct:.1f}%" for t, _, pct in contribs
+            )
+            print(f"    ↳ DUPLICATE: {dup_id} | Angle: {deg:.2f} deg (sim: {sim:.4f})")
+            if terms_str:
+                print(f"        Drivers: {terms_str}")
+
+            duplicates_info.append(
+                {
+                    "doc_id": dup_id,
+                    "similarity_to_canonical": sim,
+                    "angle_deg": deg,
+                    "top_drivers": terms_str,
+                }
+            )
+
+        cluster_records.append(
+            {
+                "cluster_id": c_idx,
+                "canonical_id": canonical_id,
+                "size": len(members),
+                "duplicates": duplicates_info,
+            }
+        )
+
+    if len(dup_clusters) > args.max_display:
+        print(
+            f"\n... [{len(dup_clusters) - args.max_display} additional clusters omitted from console]"
+        )
+
+    if args.output_json:
+        report_data = {
+            "total_documents": n_docs,
+            "duplicate_clusters": len(dup_clusters),
+            "redundant_documents": total_redundant_docs,
+            "redundancy_ratio_pct": redundancy_ratio,
+            "threshold_deg": args.duplicate_deg,
+            "clusters": cluster_records,
+        }
+        os.makedirs(os.path.dirname(os.path.abspath(args.output_json)), exist_ok=True)
+        with open(args.output_json, "w", encoding="utf-8") as f:
+            json.dump(report_data, f, indent=2)
+        print(f"\n[SUCCESS] Exported JSON audit report to: {args.output_json}")
+
+    print("=" * 65)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="spherical-ir",
@@ -344,6 +486,31 @@ def main() -> None:
         "--index-dir", default=INDEX_DIR, help="Path to index directory."
     )
 
+    # Subcommand: audit-duplicates
+    audit_parser = subparsers.add_parser(
+        "audit-duplicates", help="Scan entire corpus for near-duplicate clusters."
+    )
+    audit_parser.add_argument(
+        "--duplicate-deg",
+        type=float,
+        default=30.0,
+        help="Max angle for duplicate grouping (default 30.0 deg, cos_sim >= ~0.866).",
+    )
+    audit_parser.add_argument(
+        "--max-display",
+        type=int,
+        default=15,
+        help="Max number of clusters to display on console.",
+    )
+    audit_parser.add_argument(
+        "--output-json",
+        default=os.path.join(INDEX_DIR, "duplicate_audit.json"),
+        help="Path to save JSON duplicate audit report.",
+    )
+    audit_parser.add_argument(
+        "--index-dir", default=INDEX_DIR, help="Path to index directory."
+    )
+
     args = parser.parse_args()
 
     if args.command == "build-index":
@@ -352,6 +519,8 @@ def main() -> None:
         cmd_search(args)
     elif args.command == "explain":
         cmd_explain(args)
+    elif args.command == "audit-duplicates":
+        cmd_audit_duplicates(args)
 
 
 if __name__ == "__main__":
