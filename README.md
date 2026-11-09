@@ -9,8 +9,8 @@ A production-grade, 100% air-gapped directional semantic retrieval and document 
 Spherical-IR operationalizes directional geometry on the unit hypersphere $\mathbb{S}^{D-1}$ as derived in `Angles and Cosine Similarity.md`:
 
 1. **Directional Isolation via Magnitude Factorization:**
-   $$\text{cos\_sim}(\mathbf{u}, \mathbf{v}) = \frac{\mathbf{u}^\top \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2} = \cos(\theta)$$
-   Positive scale invariance ($\text{cos\_sim}(c\mathbf{u}, \mathbf{v}) = \text{cos\_sim}(\mathbf{u}, \mathbf{v})$ for $c > 0$) completely decouples semantic topic alignment from document length disparities.
+   $$\text{cos sim}(\mathbf{u}, \mathbf{v}) = \frac{\mathbf{u}^\top \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2} = \cos(\theta)$$
+   Positive scale invariance ($\text{cos sim}(c\mathbf{u}, \mathbf{v}) = \text{cos sim}(\mathbf{u}, \mathbf{v})$ for $c > 0$) completely decouples semantic topic alignment from document length disparities.
 
 2. **Pre-Normalized Euclidean Isomorphism (Derivation 2):**
    By mapping document vectors to the unit hypersphere offline:
@@ -25,15 +25,15 @@ Spherical-IR operationalizes directional geometry on the unit hypersphere $\math
 
 4. **First-Quadrant Non-Negativity (Section 17):**
    Lexical TF-IDF representations satisfy $\mathbf{x} \in \mathbb{R}_{\ge 0}^D$. This geometrically restricts vectors to the first hyper-quadrant, proving:
-   $$\text{cos\_sim}(\mathbf{u}, \mathbf{v}) \in [0.0, 1.0], \quad \theta \in [0^\circ, 90^\circ]$$
+   $$\text{cos sim}(\mathbf{u}, \mathbf{v}) \in [0.0, 1.0], \quad \theta \in [0^\circ, 90^\circ]$$
 
 5. **Explainable Inner Product Decomposition:**
-   $$\text{cos\_sim}(\mathbf{q}, \mathbf{d}) = \sum_{j=1}^D (\hat{q}_j \cdot \hat{d}_j)$$
+   $$\text{cos sim}(\mathbf{q}, \mathbf{d}) = \sum_{j=1}^D (\hat{q}_j \cdot \hat{d}_j)$$
    Enables exact term-by-term attribution of retrieval and duplicate matching decisions.
 
 6. **True Angular Metric Bounding:**
-   Unlike cosine distance ($1 - \text{cos\_sim}$), normalized angular distance:
-   $$D_{\text{ang}}(\mathbf{u}, \mathbf{v}) = \frac{\theta}{\pi} = \frac{\arccos(\text{cos\_sim})}{\pi}$$
+   Unlike cosine distance ($1 - \text{cos sim}$), normalized angular distance:
+   $$D_{\text{ang}}(\mathbf{u}, \mathbf{v}) = \frac{\theta}{\pi} = \frac{\arccos(\text{cos sim})}{\pi}$$
    is a true mathematical metric satisfying the triangle inequality:
    $$D_{\text{ang}}(\mathbf{x}, \mathbf{z}) \le D_{\text{ang}}(\mathbf{x}, \mathbf{y}) + D_{\text{ang}}(\mathbf{y}, \mathbf{z})$$
 
